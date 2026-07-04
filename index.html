@@ -1017,7 +1017,7 @@ addEventListener("resize", fitStage);
    (DDLC), Undertale-style blips, silence on choices, eerie auditorium
    layer (Until Dawn), campus murmur ambience, satisfying UI clicks,
    previously-unheard sting at the endings (RDR). */
-window.ASSETS_AUDIO = {"correct":"audio/End_of_Game_Correct_Answer.mp3","wrong":"audio/End_of_Game_Wrong_Answer.mp3","credits":"audio/Credits_Music.mp3"};
+window.ASSETS_AUDIO = {"correct":"audio/End_of_Game_Correct_Answer.mp3","wrong":"audio/End_of_Game_Wrong_Answer.mp3","credits":"audio/Credits_Music.mp3","music_rooms":"audio/All_Rooms_Music_except_Auditorium.mp3","music_auditorium":"audio/Auditorium_Music.mp3","sfx_click":"audio/Click_Button_Sound.mp3","sfx_walk":"audio/Walking_Sound.mp3","sfx_clue":"audio/Found_a_Clue_Sound.mp3","sfx_pickup":"audio/Pick_Up_Item_Sound.mp3"};
 const AUD = (()=>{
   const supported = typeof (window.AudioContext||window.webkitAudioContext) !== "undefined";
   let C=null, master, musG, padG, droneG, ambG, ambPan;
@@ -1190,6 +1190,74 @@ const AUD = (()=>{
       e.gain.exponentialRampToValueAtTime(0.0001,t+0.035);
       o.connect(e); e.connect(master); o.start(t); o.stop(t+0.05); },
     door(){ if(!C) return; noiseHit(C.currentTime, 0.16, 180, 1, 0.045); },
+    /* ---- one-shot SFX (short files, may overlap) ---- */
+    _sfxBuf:{},
+    sfx(key,{vol=0.9}={}){
+      if(!C) return; if(C.state==="suspended") C.resume();
+      const src=(window.ASSETS_AUDIO||{})[key]; if(!src) return;
+      const el=new Audio(); el.src=src;
+      try{
+        const m=C.createMediaElementSource(el);
+        const g=C.createGain(); g.gain.value=muted?0:vol;
+        m.connect(g); g.connect(master);
+      }catch(e){ el.volume=muted?0:vol; }
+      const p=el.play(); if(p&&p.catch) p.catch(()=>{});
+    },
+    /* ---- walking loop (start/stop with movement) ---- */
+    _walk:null,
+    walkOn(){
+      if(!C) return; if(C.state==="suspended") C.resume();
+      if(this._walk && !this._walk.el.paused) return;
+      if(!this._walk){
+        const src=(window.ASSETS_AUDIO||{}).sfx_walk; if(!src) return;
+        const el=new Audio(); el.src=src; el.loop=true;
+        let g;
+        try{ const m=C.createMediaElementSource(el); g=C.createGain(); g.gain.value=0; m.connect(g); g.connect(master); }
+        catch(e){ g=null; el.volume=0; }
+        this._walk={el,g};
+      }
+      const w=this._walk, t=C.currentTime;
+      const p=w.el.play(); if(p&&p.catch) p.catch(()=>{});
+      if(w.g){ w.g.gain.cancelScheduledValues(t); w.g.gain.setValueAtTime(Math.max(0.0001,w.g.gain.value),t); w.g.gain.linearRampToValueAtTime(muted?0:0.55,t+0.08); }
+      else { w.el.volume=muted?0:0.55; }
+    },
+    walkOff(){
+      const w=this._walk; if(!w||!C) return; const t=C.currentTime;
+      if(w.g){ w.g.gain.cancelScheduledValues(t); w.g.gain.setValueAtTime(Math.max(0.0001,w.g.gain.value),t); w.g.gain.linearRampToValueAtTime(0.0001,t+0.12); setTimeout(()=>{ try{ w.el.pause(); }catch(e){} },160); }
+      else { w.el.volume=0; try{ w.el.pause(); }catch(e){} }
+    },
+    /* ---- music bed (loops, swaps per scene) ---- */
+    _bed:{ node:{}, cur:null, curKey:null },
+    _bedNode(key){
+      const B=this._bed; if(B.node[key]) return B.node[key]; if(!C) return null;
+      const src=(window.ASSETS_AUDIO||{})[key]; if(!src) return null;
+      const el=new Audio(); el.src=src; el.loop=true; el.preload="auto";
+      let g,media;
+      try{ media=C.createMediaElementSource(el); g=C.createGain(); g.gain.value=0; media.connect(g); g.connect(master); }
+      catch(e){ g=null; }
+      return (B.node[key]={el,g});
+    },
+    musicBed(key,{ms=1400,vol=0.5}={}){
+      if(!C) return; if(C.state==="suspended") C.resume();
+      const B=this._bed; if(B.curKey===key && B.cur && !B.cur.el.paused) return;
+      const nxt=this._bedNode(key); if(!nxt) return;
+      const prev=B.cur; const t=C.currentTime, dur=Math.max(0.01,ms/1000);
+      mode="quiet"; // silence synth theme
+      const p=nxt.el.play(); if(p&&p.catch) p.catch(()=>{});
+      if(nxt.g){ nxt.g.gain.cancelScheduledValues(t); nxt.g.gain.setValueAtTime(Math.max(0.0001,nxt.g.gain.value),t); nxt.g.gain.linearRampToValueAtTime(muted?0:vol,t+dur); }
+      else { nxt.el.volume=muted?0:vol; }
+      if(prev && prev!==nxt){
+        if(prev.g){ prev.g.gain.cancelScheduledValues(t); prev.g.gain.setValueAtTime(Math.max(0.0001,prev.g.gain.value),t); prev.g.gain.linearRampToValueAtTime(0.0001,t+dur); setTimeout(()=>{ try{ prev.el.pause(); }catch(e){} },ms+80); }
+        else { try{ prev.el.pause(); }catch(e){} }
+      }
+      B.cur=nxt; B.curKey=key;
+    },
+    musicBedStop(ms=800){
+      const B=this._bed; const n=B.cur; if(!n||!C) return; const t=C.currentTime, dur=Math.max(0.01,ms/1000);
+      if(n.g){ n.g.gain.cancelScheduledValues(t); n.g.gain.setValueAtTime(Math.max(0.0001,n.g.gain.value),t); n.g.gain.linearRampToValueAtTime(0.0001,t+dur); setTimeout(()=>{ try{ n.el.pause(); }catch(e){} },ms+80); }
+      else { try{ n.el.pause(); }catch(e){} }
+      B.cur=null; B.curKey=null;
+    },
     /* ---- file-audio layer (MP3 endings/credits), routed through the
        unlocked AudioContext via MediaElementSource ---- */
     _fa:{ node:{}, cur:null, curKey:null },
@@ -1422,6 +1490,7 @@ function gotoScene(to, spawn){
   fadeTo("", ()=>{
     S.scene = to; S.px = spawn[0]; S.py = spawn[1];
     AUD.setScene(to);
+    AUD.musicBed(to==="auditorium"?"music_auditorium":"music_rooms");
     clock(12); hud();
     if(to === "auditorium" && !S.seenAud){
       S.seenAud = true;
@@ -1450,7 +1519,9 @@ function step(){
   if(moved){
     const prev = bobPh;
     bobPh += 0.21;
-    if(Math.floor(prev/Math.PI) !== Math.floor(bobPh/Math.PI)) AUD.foot();
+    if(!wasMoving) AUD.walkOn();
+  } else if(wasMoving){
+    AUD.walkOff();
   }
   wasMoving = moved;
 
@@ -1513,6 +1584,7 @@ function interact(){
   else {
     const it = interactTarget.it;
     clock(6);
+    AUD.sfx("sfx_pickup",{vol:0.8});
     if(it.clue) collect(it.clue, true);
     modal(it.label.toUpperCase(), it.text, ()=>{
       if(it.id === "note" && !S.vars._note_tut){
@@ -1949,7 +2021,7 @@ function doAccuse(who){
     if(!ex("dosing_mechanism")){ captainSays(SOFTBLOCK.noone_guess, openAccuse); return; }
     if(!(exonMaya() && exonDavid())){ captainSays(SOFTBLOCK.noone_open, openAccuse); return; }
     S.accused = "no_one"; S.ending = "correct";
-    AUD.sting(true); AUD.filePlay("correct",{loop:true,fadeIn:1400});
+    AUD.sting(true); AUD.musicBedStop(500); AUD.walkOff(); AUD.filePlay("correct",{loop:true,fadeIn:1400});
     playCut([
       {who:"", it:"The board, finally, makes a different shape. Not a web of who-hated-her. A line. A straight line through time: a name from a canteen worker, a logo in a bin, a daily sachet, a body going grey on the stairs, a number that should never have been that high.", text:""},
       {who:"CAPTAIN", text:"“No arrest. You're telling me to close a murder with no murderer.”"},
@@ -1961,7 +2033,7 @@ function doAccuse(who){
   }
   if(who === "bestie"){
     S.accused = "bestie"; S.ending = "wrong_bestie";
-    AUD.sting(false); AUD.filePlay("wrong",{loop:true,fadeIn:1400});
+    AUD.sting(false); AUD.musicBedStop(500); AUD.walkOff(); AUD.filePlay("wrong",{loop:true,fadeIn:1400});
     playCut([
       {who:"", it:"You make the charge. The paperwork takes an evening; the certainty takes less. Three days pass.", text:""},
       {who:"CAPTAIN", it:"(three days later)", text:"“Okonkwo's released. Insufficient evidence. The firm in the city confirmed her interview - she was a mile from campus at eleven. The attendance was a tap-in; the Haynes boy's owned up. The flask came back clean - and even if it hadn't, the lab says whatever killed her was building for weeks. A flask she gave her days before couldn't do that.”",
@@ -1974,7 +2046,7 @@ function doAccuse(who){
   }
   if(who === "david"){
     S.accused = "david"; S.ending = "wrong_david";
-    AUD.sting(false); AUD.filePlay("wrong",{loop:true,fadeIn:1400});
+    AUD.sting(false); AUD.musicBedStop(500); AUD.walkOff(); AUD.filePlay("wrong",{loop:true,fadeIn:1400});
     playCut([
       {who:"", it:"You make the charge. He doesn't protest much; he looks like a man who expected to be misread. A fortnight passes.", text:""},
       {who:"CAPTAIN", it:"(a fortnight later)", text:"“Jones is out. We never had a thing on him but a temper and a textbook. No physical link - nothing of his near her food, and she wasn't eating her food, she was on that powder. Then the lab analysis landed: the supplement was over-fortified with selenium, traced to the source. Cause of death established. No room left for a poisoner who didn't poison her.”",
@@ -1993,7 +2065,7 @@ function reopen(){
     S.reopened = true; S.accused = null; S.ending = null; S.reopening = false;
     S.day = 5; S.t = 9*60; S.vars._dusk = false;
     S.scene = "outside"; S.px = 314; S.py = 400;
-    AUD.fileStop(600); AUD.setScene("outside"); AUD.music("theme");
+    AUD.fileStop(600); AUD.setScene("outside"); AUD.music("theme"); AUD.musicBed("music_rooms");
     showScreen(null); S.mode = "world"; hud();
     toast("The case is reopened. Everything you filed, you keep. Do better.", true);
   }, 50);
@@ -2129,7 +2201,7 @@ $("btnFileClose").onclick = ()=> closeFile();
 $("btnDorm").onclick = ()=>{ if(S.mode==="world"){ S.vars._dusk = true; nightfall(); } };
 $("btnBoard").onclick = ()=> openBoard();
 $("btnStart").onclick = ()=>{
-  AUD.init(); AUD.setDay(1); AUD.fileStop(600); AUD.setScene("outside"); AUD.music("theme");
+  AUD.init(); AUD.setDay(1); AUD.fileStop(600); AUD.setScene("outside"); AUD.music("theme"); AUD.musicBed("music_rooms");
   newGame(); hud();
   showScreen(null); S.mode = "world";
   toast("WASD / arrows to walk. TAB — case file.", true);
@@ -2154,11 +2226,11 @@ $("ebtn").addEventListener("click", ()=>{
   collect = function(id, alsoExamine){
     const had = S.clues[id] && S.clues[id].collected;
     _c(id, alsoExamine);
-    if(!had && S.clues[id] && S.clues[id].collected) AUD.paper();
+    if(!had && S.clues[id] && S.clues[id].collected) AUD.sfx("sfx_clue",{vol:0.85});
   };
 }
 document.addEventListener("click", e=>{
-  if(e.target.tagName === "BUTTON" && !e.target.classList.contains("opt")) AUD.click();
+  if(e.target.tagName === "BUTTON" && !e.target.classList.contains("opt")) AUD.sfx("sfx_click",{vol:0.8});
 }, true);
 addEventListener("keydown", ()=> AUD.resume());
 // mute toggle in HUD

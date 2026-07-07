@@ -197,6 +197,15 @@ button.danger{background:var(--verm); color:var(--paper);}
 #review em.tool{color:var(--amber); font-style:normal; border-bottom:2px solid var(--amber);}
 #review .quote{color:var(--dim); font-style:italic;}
 #review .actions{max-width:600px; margin:26px auto 50px; display:flex; gap:10px;}
+.study-box{max-width:600px; margin:0 auto 40px; padding:16px; background:var(--ink); border:2px dashed var(--amber); color:var(--paper);}
+.study-box h3{margin:0 0 8px; color:var(--amber);}
+.study-box p{font-size:13px; line-height:1.5; color:var(--paper); margin:0 0 12px;}
+.study-box .study-row{display:flex; align-items:center; gap:8px; margin:8px 0; flex-wrap:wrap;}
+.study-box label{font-size:13px;}
+.study-box input{background:var(--paper); color:var(--ink); border:2px solid var(--plum); font-family:inherit; font-size:14px; padding:5px 8px; width:150px; text-transform:uppercase;}
+.study-box textarea{width:100%; height:64px; margin:6px 0; background:#12101a; color:var(--amber); border:2px solid var(--plum); font-family:monospace; font-size:11px; padding:8px; resize:vertical; word-break:break-all;}
+.study-box button{font-family:inherit;}
+.study-box #studyMsg{font-size:12px; color:var(--amber);}
 
 /* modal (lab results, lookups) */
 #modal{
@@ -2451,7 +2460,83 @@ function caseReview(){
   R.innerHTML = blocks.join("")
     + "<div class='actions'><button id='btnAgain'>PLAY AGAIN</button></div>";
   $("btnAgain").onclick = ()=>{ newGame(); showScreen("title"); S.mode = "title"; };
+  if(STUDY_MODE) renderResearchExport(R);
   R.scrollTop = 0;
+}
+
+/* ---------- research export (study mode only; no backend) ----------
+   Appears at the end of the case review ONLY when the game is opened with
+   ?study=1. Produces a compact, copy-able string keyed to the participant's
+   linking code, which they paste into the final questionnaire field. No data
+   leaves the browser automatically; nothing personal is stored by the game. */
+const STUDY_MODE = /[?&]study=1\b/.test(location.search);
+function linkShape(a,b){
+  const ca = CLUES[a] && CLUES[a].cat, cb = CLUES[b] && CLUES[b].cat;
+  if(ca==="motive"   && cb==="motive")   return "MM";
+  if(ca==="timeline" && cb==="timeline") return "TT";
+  return "XX";
+}
+function buildResearchCode(code){
+  const ex = id => (S.clues[id] && S.clues[id].examined) || 0;
+  const clueVals = Object.values(S.clues);
+  const coll = clueVals.filter(c=> c.collected).length;
+  const exam = clueVals.filter(c=> c.examined).length;
+  const linkMM = S.links.filter(l=> linkShape(l.a,l.b)==="MM").length;
+  const linkTT = S.links.filter(l=> linkShape(l.a,l.b)==="TT").length;
+  const skipped = SKIPPABLE.filter(id=> !S.visits[id]);
+  const sawSkip = SKIPPABLE.filter(id=> S.visits[id]);
+  const clean = (code||"NONE").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12) || "NONE";
+  const fields = [
+    "v1",
+    "code=" + clean,
+    "end=" + (S.ending || "none"),
+    "acc=" + (S.accused || "none"),
+    "reopen=" + (S.reopened ? 1 : 0),
+    "day=" + S.day,
+    "rf=" + S.rf,
+    "toxExam=" + ex("tox_timeline"),
+    "clues=" + coll + "/" + exam,
+    "links=" + S.links.length + "(MM" + linkMM + ",TT" + linkTT + ")",
+    "skipNPC=" + (skipped.length ? skipped.join("+") : "none"),
+    "sawNPC=" + (sawSkip.length ? sawSkip.join("+") : "none"),
+  ];
+  return "CASE2606|" + fields.join("|");
+}
+function renderResearchExport(R){
+  const box = document.createElement("div");
+  box.className = "study-box";
+  box.innerHTML =
+    "<h3>Research session - final step</h3>"
+    + "<p>Enter the personal code you used on the questionnaires, then press Generate. "
+    + "Copy the line that appears and paste it into the last question of Questionnaire 2.</p>"
+    + "<div class='study-row'><label>Your personal code: </label>"
+    + "<input id='studyCode' type='text' maxlength='12' autocomplete='off' placeholder='e.g. AN0743'></div>"
+    + "<div class='study-row'><button id='studyGen'>GENERATE MY CODE</button></div>"
+    + "<textarea id='studyOut' readonly placeholder='(your code will appear here)'></textarea>"
+    + "<div class='study-row'><button id='studyCopy' disabled>COPY</button>"
+    + "<span id='studyMsg'></span></div>";
+  R.appendChild(box);
+  $("studyGen").onclick = ()=>{
+    const code = $("studyCode").value.trim();
+    if(!code){ $("studyMsg").textContent = "Please enter your code first."; return; }
+    const out = buildResearchCode(code);
+    $("studyOut").value = out;
+    $("studyCopy").disabled = false;
+    $("studyMsg").textContent = "";
+  };
+  $("studyCopy").onclick = ()=>{
+    const ta = $("studyOut");
+    if(!ta.value) return;
+    ta.select();
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(ta.value);
+      } else { document.execCommand("copy"); }
+      $("studyMsg").textContent = "Copied. Paste it into the questionnaire.";
+    }catch(e){
+      $("studyMsg").textContent = "Select the text and copy it manually (Ctrl/Cmd+C).";
+    }
+  };
 }
 
 /* ---------- input ---------- */

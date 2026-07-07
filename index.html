@@ -1919,7 +1919,7 @@ function typeDone(){
       b.className = "opt" + (ok ? "" : " locked");
       b.innerHTML = ok
         ? "<span class='k'>"+(idx+1)+"</span>" + o.t
-        : "<span class='k'>"+(idx+1)+"</span>??? <span style='opacity:.7'>(something's missing)</span>";
+        : "<span class='k'>"+(idx+1)+"</span>??? <span style='opacity:.7'>(you don't know enough to ask this yet)</span>";
       if(ok) b.onclick = ()=> pick(o);
       $("dlgOpts").appendChild(b);
     });

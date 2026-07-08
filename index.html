@@ -197,6 +197,21 @@ button.danger{background:var(--verm); color:var(--paper);}
 #review em.tool{color:var(--amber); font-style:normal; border-bottom:2px solid var(--amber);}
 #review .quote{color:var(--dim); font-style:italic;}
 #review .actions{max-width:600px; margin:26px auto 50px; display:flex; gap:10px;}
+#credits{padding-top:40px; text-align:center;}
+#credits .roll{max-width:460px; margin:0 auto;}
+#credits .ctitle{font-size:26px; letter-spacing:4px; color:var(--amber); margin-bottom:34px;}
+#credits .role{font-size:11px; letter-spacing:2px; color:var(--verm); text-transform:uppercase; margin-bottom:3px;}
+#credits .name{font-size:16px; color:var(--paper); margin-bottom:20px;}
+#credits .rule{width:60px; height:2px; background:var(--dim); opacity:.5; margin:26px auto;}
+#credits .thanks-h{font-size:11px; letter-spacing:2px; color:var(--verm); text-transform:uppercase; margin-bottom:8px;}
+#credits .thanks-n{font-size:15px; color:var(--paper); margin-bottom:8px;}
+#credits .thanks-note{font-size:13px; font-style:italic; color:var(--dim); line-height:1.55; margin-bottom:4px;}
+#credits .support-h{font-size:11px; letter-spacing:2px; color:var(--verm); text-transform:uppercase; margin-bottom:8px;}
+#credits .support-l{font-size:13.5px; color:var(--paper); margin-bottom:4px;}
+#credits .inst{font-size:13.5px; color:var(--paper); margin-bottom:3px;}
+#credits .fund{font-size:13px; color:var(--dim); margin-top:14px;}
+#credits .closing{font-size:14px; font-style:italic; color:var(--amber); margin:30px 0;}
+#credits .actions{margin:20px auto 50px; display:flex; gap:10px; justify-content:center;}
 .study-box{max-width:600px; margin:0 auto 40px; padding:16px; background:var(--ink); border:2px dashed var(--amber); color:var(--paper);}
 .study-box h3{margin:0 0 8px; color:var(--amber);}
 .study-box p{font-size:13px; line-height:1.5; color:var(--paper); margin:0 0 12px;}
@@ -348,6 +363,8 @@ button.danger{background:var(--verm); color:var(--paper);}
 
   <!-- case review -->
   <div class="screen" id="review"></div>
+
+  <div class="screen" id="credits"></div>
 
   <!-- modal -->
   <div id="modal"><div id="modalBox" class="px-panel"></div></div>
@@ -2458,10 +2475,54 @@ function caseReview(){
   B(null, "<div class='quote'>“Five tools. Five days. The murder was never the hard part - there wasn't one. The hard part was noticing when you'd decided, and asking whether you'd decided too soon. That's the whole skill. Take it with you out of the game.”</div>");
 
   R.innerHTML = blocks.join("")
-    + "<div class='actions'><button id='btnAgain'>PLAY AGAIN</button></div>";
+    + "<div class='actions'><button id='btnAgain'>PLAY AGAIN</button><button id='btnCredits'>CREDITS</button></div>";
   $("btnAgain").onclick = ()=>{ newGame(); showScreen("title"); S.mode = "title"; };
+  $("btnCredits").onclick = ()=> showCredits();
   if(STUDY_MODE) renderResearchExport(R);
   R.scrollTop = 0;
+}
+
+/* ---------- credits (static, paged; credits music already looping from case review) ---------- */
+function showCredits(){
+  S.mode = "credits";
+  showScreen("credits");
+  const C = $("credits");
+  C.innerHTML =
+    "<div class='roll'>"
+    + "<div class='ctitle'>CASE 2606</div>"
+
+    + "<div class='role'>Project Lead</div><div class='name'>Maritina Keleri</div>"
+    + "<div class='role'>Project Co-Lead</div><div class='name'>Dr Maria Marda</div>"
+    + "<div class='role'>Narrative Designer &amp; Interaction Designer</div><div class='name'>Millie Thomson</div>"
+    + "<div class='role'>Art Director</div><div class='name'>Lara Kleingarn</div>"
+
+    + "<div class='rule'></div>"
+
+    + "<div class='thanks-h'>With special thanks to</div>"
+    + "<div class='thanks-n'>Marcus Carone and Lumie Gomes</div>"
+    + "<div class='thanks-note'>for their contributions to the project's early concept and direction</div>"
+
+    + "<div class='rule'></div>"
+
+    + "<div class='support-h'>Created with the support of</div>"
+    + "<div class='support-l'>Claude AI - scripting</div>"
+    + "<div class='support-l'>PixelLab - visuals</div>"
+    + "<div class='support-l'>Pixabay - sound effects</div>"
+
+    + "<div class='rule'></div>"
+
+    + "<div class='inst'>University of Westminster</div>"
+    + "<div class='inst'>Foundation Programme</div>"
+    + "<div class='inst'>Centre for Education and Teaching Innovation (CETI)</div>"
+    + "<div class='fund'>Funded by Students as Co-Creators Programme</div>"
+
+    + "<div class='closing'>Thank you for playing.</div>"
+
+    + "<div class='actions'><button id='btnBackReview'>BACK</button><button id='btnCredTitle'>MAIN MENU</button></div>"
+    + "</div>";
+  $("btnBackReview").onclick = ()=>{ showScreen("review"); S.mode = "review"; };
+  $("btnCredTitle").onclick = ()=>{ newGame(); showScreen("title"); S.mode = "title"; };
+  C.scrollTop = 0;
 }
 
 /* ---------- research export (study mode only; no backend) ----------
@@ -2502,6 +2563,139 @@ function buildResearchCode(code){
   ];
   return "CASE2606|" + fields.join("|");
 }
+
+/* ---------- human-readable session log (study mode only; download) ----------
+   A plain-English record of the playthrough for the researcher, built from the
+   SAME logged trail the case-review engine reads: clue collected/examined days,
+   board links and their notes, the NPC visit log, the revenge-frame counter,
+   accusation and ending. Pure record - no framing, no interpretation. It sits
+   beside the pipe-delimited code, which stays the machine-parseable export. */
+function buildSessionLog(code){
+  const NL = "\n";
+  const pad2 = n => (n<10 ? "0"+n : ""+n);
+  const clean = (code||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+  const L = [];
+  const line = s => L.push(s==null ? "" : s);
+  const rule = () => line("------------------------------------------------------------");
+
+  // header
+  rule();
+  line("CASE 2606 - SESSION LOG");
+  line("Human-readable record of one playthrough.");
+  line("Generated on device; nothing sent anywhere.");
+  rule();
+  line("Participant code : " + (clean || "(none entered)"));
+  const now = new Date();
+  line("Generated        : " + now.getFullYear() + "-" + pad2(now.getMonth()+1) + "-" + pad2(now.getDate())
+       + " " + pad2(now.getHours()) + ":" + pad2(now.getMinutes()));
+  line("Days played      : reached Day " + S.day);
+  line("");
+
+  // outcome
+  line("OUTCOME");
+  const endName = {correct:"No one charged - self-poisoning (correct)",
+                   wrong_bestie:"Charged Sally Rose (wrong)",
+                   wrong_david:"Charged David Jones (wrong)"};
+  const accName = {no_one:"No one", bestie:"Sally Rose", david:"David Jones",
+                   cecilia:"Cecilia Thomas", frank:"Frank Haynes"};
+  line("  Accusation : " + (S.accused ? (accName[S.accused] || S.accused) : "none made"));
+  line("  Ending     : " + (S.ending ? (endName[S.ending] || S.ending) : "none reached"));
+  line("  Reopened   : " + (S.reopened ? "yes - case was first closed another way, then reopened" : "no"));
+  line("");
+
+  // clues, in the order they were first found; each with found/read days
+  line("CLUES - what was found, and when it was read");
+  const clueIds = Object.keys(CLUES).filter(id => S.clues[id] && S.clues[id].collected);
+  clueIds.sort((a,b)=> S.clues[a].collected - S.clues[b].collected);
+  if(!clueIds.length){
+    line("  (no clues filed)");
+  } else {
+    clueIds.forEach(id=>{
+      const st = S.clues[id], c = CLUES[id];
+      const cat = CAT_LABEL[c.cat] || c.cat;
+      let read;
+      if(!st.examined) read = "never read";
+      else if(st.examined === st.collected) read = "read same day";
+      else read = "read Day " + st.examined;
+      line("  Day " + st.collected + "  [" + cat + "]  " + c.n + "  -  " + read);
+    });
+  }
+  // clues never found at all, listed plainly so the record is complete
+  const missedClues = Object.keys(CLUES).filter(id => !(S.clues[id] && S.clues[id].collected));
+  if(missedClues.length){
+    line("");
+    line("  Never found (" + missedClues.length + "): " + missedClues.map(id=> CLUES[id].n).join("; "));
+  }
+  line("");
+
+  // board links, in the order drawn; raw category pairing, participant's own note
+  line("BOARD LINKS - drawn between clues, in order");
+  if(!S.links.length){
+    line("  (no links drawn)");
+  } else {
+    let mm=0, tt=0, xx=0;
+    S.links.forEach(l=>{
+      const na = CLUES[l.a] ? CLUES[l.a].n : l.a;
+      const nb = CLUES[l.b] ? CLUES[l.b].n : l.b;
+      const ca = CLUES[l.a] ? (CAT_LABEL[CLUES[l.a].cat]||CLUES[l.a].cat) : "?";
+      const cb = CLUES[l.b] ? (CAT_LABEL[CLUES[l.b].cat]||CLUES[l.b].cat) : "?";
+      const shape = linkShape(l.a, l.b);
+      if(shape==="MM") mm++; else if(shape==="TT") tt++; else xx++;
+      line("  Day " + l.day + "  " + na + " (" + ca + ")  +  " + nb + " (" + cb + ")");
+      if(l.note && l.note.trim()) line("           note: " + l.note.trim());
+    });
+    line("");
+    line("  Totals: " + S.links.length + " links - "
+         + mm + " motive-to-motive, " + tt + " timeline-to-timeline, " + xx + " other");
+  }
+  line("");
+
+  // NPC visit log - who was spoken to, on which days, and who was never seen
+  line("PEOPLE - who was spoken to, and when");
+  const npcIds = Object.keys(NPCS);
+  const spoken = npcIds.filter(id => S.visits[id] && S.visits[id].length);
+  spoken.forEach(id=>{
+    const days = S.visits[id].slice().sort((a,b)=>a-b);
+    const skipTag = SKIPPABLE.includes(id) ? "  (optional supply-chain source)" : "";
+    line("  " + NPCS[id].name + "  -  Day" + (days.length>1?"s":"") + " " + days.join(", ") + skipTag);
+  });
+  const notSpoken = npcIds.filter(id => !(S.visits[id] && S.visits[id].length));
+  if(notSpoken.length){
+    line("");
+    line("  Never spoken to: " + notSpoken.map(id=> NPCS[id].name
+         + (SKIPPABLE.includes(id) ? " (optional supply-chain source)" : "")).join("; "));
+  }
+  line("");
+
+  // bare record of the source-evaluation moments (facts, no reading of them)
+  line("SOURCE-CHECK EVENTS");
+  line("  Attendance record examined : " + (S.clues.bestie_attendance_false && S.clues.bestie_attendance_false.examined ? "yes" : "no"));
+  line("  Attendance shown false     : " + (V("attendance_flipped") ? "yes" : "no"));
+  line("  Head of School's claim accepted without re-check : " + (V("hos_penalised") && !V("attendance_system_doubt") && !ex("frank_tapin") ? "yes" : "no"));
+  line("  Attendance system questioned : " + (V("attendance_system_doubt") ? "yes" : "no"));
+  line("  Toxicology timeline read     : " + (S.clues.tox_timeline && S.clues.tox_timeline.examined ? ("yes, Day " + S.clues.tox_timeline.examined) : "no"));
+  line("  Revenge-frame counter (raw)  : " + S.rf);
+  line("");
+
+  // participant's own nightly journal, verbatim
+  line("NIGHTLY JOURNAL - the participant's own words");
+  let anyJournal = false;
+  for(let d=1; d<=5; d++){
+    const txt = S.journal[d];
+    if(txt && txt.trim()){
+      anyJournal = true;
+      line("  Day " + d + ":");
+      txt.trim().split(/\r?\n/).forEach(ln=> line("    " + ln));
+    }
+  }
+  if(!anyJournal) line("  (no journal entries written)");
+  line("");
+  rule();
+  line("End of session log.");
+  rule();
+
+  return L.join(NL);
+}
 function renderResearchExport(R){
   const box = document.createElement("div");
   box.className = "study-box";
@@ -2514,7 +2708,11 @@ function renderResearchExport(R){
     + "<div class='study-row'><button id='studyGen'>GENERATE MY CODE</button></div>"
     + "<textarea id='studyOut' readonly placeholder='(your code will appear here)'></textarea>"
     + "<div class='study-row'><button id='studyCopy' disabled>COPY</button>"
-    + "<span id='studyMsg'></span></div>";
+    + "<span id='studyMsg'></span></div>"
+    + "<div class='study-row' style='margin-top:14px; border-top:1px solid var(--plum); padding-top:12px;'>"
+    + "<label style='flex-basis:100%'>Researcher only - full readable session log (plain text):</label></div>"
+    + "<div class='study-row'><button id='studyLog'>DOWNLOAD SESSION LOG</button>"
+    + "<span id='studyLogMsg'></span></div>";
   R.appendChild(box);
   $("studyGen").onclick = ()=>{
     const code = $("studyCode").value.trim();
@@ -2535,6 +2733,24 @@ function renderResearchExport(R){
       $("studyMsg").textContent = "Copied. Paste it into the questionnaire.";
     }catch(e){
       $("studyMsg").textContent = "Select the text and copy it manually (Ctrl/Cmd+C).";
+    }
+  };
+  $("studyLog").onclick = ()=>{
+    const code = ($("studyCode").value || "").trim();
+    const text = buildSessionLog(code);
+    const clean = code.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12) || "nocode";
+    const fname = "CASE2606_session_" + clean + ".txt";
+    try{
+      const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(()=> URL.revokeObjectURL(url), 1000);
+      $("studyLogMsg").textContent = "Saved: " + fname;
+    }catch(e){
+      $("studyLogMsg").textContent = "Download failed - check browser download settings.";
     }
   };
 }

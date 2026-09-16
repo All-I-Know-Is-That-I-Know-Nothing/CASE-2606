@@ -2360,6 +2360,19 @@ function render(){
   if(a > 0){ cx.fillStyle = "rgba(34,24,46,"+a+")"; cx.fillRect(0,0,644,448); }
   requestAnimationFrame(render);
 }
+setInterval(step, 16);
+
+/* ---------- Opening brief - the victim and what is known (shown once, before Day 1) ---------- */
+const CASE_INTRO = [
+  {who:"", it:"Monday. A phone call before seven. You are dressed before it ends.", text:""},
+  {who:"CAPTAIN", text:"“Harrow campus. A student, found dead in the main auditorium this morning - Hannah Turner, final year. A class was in the room from nine. Just before eleven one of them found her on the floor by the third row. Gone before the paramedics got through the door.”"},
+  {who:"CAPTAIN", text:"“No weapon. No sign of a fight. Nothing yet from the pathologist except that she was young, fit, and shouldn't be dead. The university wants it quiet. The city wants it answered. I want it right.”"},
+  {who:"DETECTIVE", text:"“What am I walking into?”"},
+  {who:"CAPTAIN", text:"“A campus full of people who knew her, and at least a few who didn't like her. Start at the barrier - the security guard, Thornton, was first on scene. Go and look at the room. Then we'll talk about how you're going to work this.”",
+   opts:[ {t:"“On my way.”", go:5}, {t:"“Who was she?”", go:5, fx(){ S.vars.asked_who_was_she = true; }} ]},
+  {who:"", it:"Hannah Turner. Twenty-one. Media and Communications. Sporty, sharp, difficult, well known. Found on the auditorium floor on Monday morning. That is everything you know. It is Day 1.", text:""},
+];
+
 /* ---------- Captain content (Part 0.5 + Part 6, verbatim) ---------- */
 const CAPTAIN_BRIEF = [
   {who:"", it:"Your safe room. A desk, a kettle, a corkboard with nothing on it yet. The Captain calls.", text:""},
@@ -3419,6 +3432,9 @@ $("btnDorm").onclick = ()=>{ if(S.mode==="world"){ S.vars._dusk = true; logEv("e
 function startGame(){
   AUD.init(); AUD.setDay(1); AUD.fileStop(600); AUD.setScene("outside"); AUD.music("theme"); AUD.musicBed("music_rooms");
   hud(); applySettings();
+  playCut(CASE_INTRO, ()=> enterWorld());
+}
+function enterWorld(){
   showScreen(null); S.mode = "world";
   logEv("start", "The case begins", null);
   toast("Walk with the arrows, or click where you want to go.", true);

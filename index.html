@@ -768,9 +768,52 @@ function checkScore(){
   return S.interp.reduce((a,e)=> a + (e.kind==="check" ? 1 : e.kind==="accept" ? -1 : 0), 0);
 }
 /* trail: one ordered log of everything, read back in the review */
+const plain = t => String(t==null?"":t).replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim();
 function logEv(ev, label, ref, extra){
-  S.log.push({day:S.day, t:S.t, ev, label, ref:ref||null, x:extra||null});
+  S.log.push({day:S.day, t:S.t, ms:msNow(), ev, label, ref:ref||null, x:extra||null});
+  if(S.clock) S.clock.lastSeen = Date.now();
 }
+/* ---------- real-time clock (research log) ----------
+   ms       - real milliseconds since the player pressed Start
+   gaps     - periods not playing: tab hidden, no input for IDLE_MS, or
+              time between the last autosave and a resume
+   active   - elapsed time minus the gaps                              */
+const IDLE_MS = 3*60*1000;
+function freshClock(){ const n = Date.now(); return {gaps:[], lastInput:n, lastSeen:n, hiddenAt:null}; }
+function msNow(){ return S ? Date.now() - S.started : 0; }
+function addGap(kind, from, to){
+  if(to - from < 1000) return;
+  S.clock.gaps.push({kind, from, to});
+  logEv(kind, (kind==="away" ? "Left the game tab" : kind==="idle" ? "No input" : "Resumed from save") + " - " + fmtDur(to - from), null, to - from);
+}
+function gapTotal(kind, a, b){
+  if(!S || !S.clock) return 0;
+  a = a==null ? 0 : a; b = b==null ? msNow() : b;
+  return S.clock.gaps.filter(g=> !kind || g.kind===kind)
+    .reduce((t,g)=> t + Math.max(0, Math.min(b, g.to) - Math.max(a, g.from)), 0);
+}
+function activeBetween(a, b){ return Math.max(0, (b - a) - gapTotal(null, a, b)); }
+function fmtDur(ms){
+  if(ms==null || ms<0) return "-";
+  const t = Math.round(ms/1000), h = Math.floor(t/3600), m = Math.floor((t%3600)/60), sec = t%60;
+  return (h ? h+" h " : "") + (h||m ? m+" min " : "") + sec+" s";
+}
+function noteInput(){
+  if(!S || !S.clock || document.hidden) return;
+  const n = Date.now(), gap = n - S.clock.lastInput;
+  S.clock.lastInput = n; S.clock.lastSeen = n;
+  if(gap >= IDLE_MS) addGap("idle", n - gap - S.started, n - S.started);
+}
+["keydown","pointerdown","wheel","touchstart","input","scroll"].forEach(t=> addEventListener(t, noteInput, {capture:true, passive:true}));
+document.addEventListener("visibilitychange", ()=>{
+  if(!S || !S.clock) return;
+  const n = Date.now();
+  if(document.hidden){ S.clock.hiddenAt = n; autosave(); }
+  else if(S.clock.hiddenAt){
+    const from = S.clock.hiddenAt; S.clock.hiddenAt = null; S.clock.lastInput = n;
+    addGap("away", from - S.started, n - S.started);
+  }
+});
 
 function checkCombos(){
   // interview + tap-in => the attendance record flips to known-false
@@ -1434,6 +1477,8 @@ function newGame(){
     scenario:{},         // study mode: {pre:{key,answers[]}, post:{...}}
     accused:null, ending:null, reopened:false,
     seenAud:false, dorm1:false, started:Date.now(),
+    endings:[],          // every ending reached, in order (kept across a reopen)
+    clock:freshClock(),  // real-time tracking: breaks away from the game
   };
 }
 
@@ -1505,6 +1550,7 @@ function gotoScene(to, spawn){
   fadeTo("", ()=>{
     S.scene = to; S.px = spawn[0]; S.py = spawn[1];
     if(!S.vars["_visited_"+to]){ S.vars["_visited_"+to] = true; logEv("go", "Went to " + SCENES[to].name, to); }
+    else logEv("move", "Went back to " + SCENES[to].name, to);
     AUD.setScene(to);
     AUD.musicBed(to==="auditorium"?"music_auditorium":"music_rooms");
     clock(3); hud();
@@ -1691,6 +1737,7 @@ function interact(){
     const it = interactTarget.it;
     clock(6);
     if(!S.vars["seen_"+it.id]) logEv("look", "Examined: " + it.label, it.id);
+    else logEv("relook", "Examined again: " + it.label, it.id);
     S.vars["seen_"+it.id] = true;
     AUD.sfx("sfx_pickup",{vol:0.8});
     if(it.clue) collect(it.clue, true);
@@ -1725,6 +1772,7 @@ function openDialogue(npcId){
   if(!tree) return;
   if(!S.visits[npcId]) S.visits[npcId] = [];
   if(!S.visits[npcId].includes(S.day)){ S.visits[npcId].push(S.day); logEv("talk", "Spoke to " + NPCS[npcId].name, npcId); }
+  else logEv("retalk", "Spoke again to " + NPCS[npcId].name, npcId);
   const _rt = NPCRT[npcId];
   if(_rt){ _rt.tx = null; _rt.moving = false; _rt.wait = 300;
     _rt.dir = Math.abs(S.px-_rt.x) > Math.abs(S.py-_rt.y) ? (S.px>_rt.x?"e":"w") : (S.py>_rt.y?"s":"n"); }
@@ -1799,6 +1847,7 @@ function typeDone(){
 }
 function pick(o){
   AUD.duck(false);
+  logEv("say", (NPCS[DR.npcId] ? NPCS[DR.npcId].name : DR.npcId) + " - chose: " + plain(o.t), DR.npcId + ":" + DR.nodeId, o.end ? "end" : o.go);
   if(o.hideIf) S.vars[o.hideIf] = true;
   if(o.fx) o.fx();
   if(o.end) DR.onDone();
@@ -1843,7 +1892,7 @@ function cutNext(){
   if(n.opts) n.opts.forEach(o=>{
     const b = document.createElement("button");
     b.textContent = o.t;
-    b.onclick = ()=>{ if(o.fx) o.fx(); if(o.go !== undefined) CUT.i = o.go - 1; cutNext(); };
+    b.onclick = ()=>{ logEv("cutpick", (n.who ? n.who + " - " : "") + "chose: " + plain(o.t), null); if(o.fx) o.fx(); if(o.go !== undefined) CUT.i = o.go - 1; cutNext(); };
     $("cutOpts").appendChild(b);
   });
 }
@@ -2400,6 +2449,7 @@ const SOFTBLOCK = {
 function openFile(){
   if(S.mode !== "world" && S.mode !== "night") return;
   S.prevMode = S.mode; S.mode = "file";
+  logEv("ui", "Opened the case file", "casefile");
   showScreen("casefile");
   renderFile();
 }
@@ -2427,7 +2477,9 @@ function renderFile(){
 }
 function clueDetail(id, where){
   const c = CLUES[id], st = S.clues[id];
+  const wasRead = st && st.examined;
   examine(id);
+  if(wasRead) logEv("reread", "Read again: " + c.n + (where==="clueDetail" ? " (case file)" : " (board)"), id);
   const el = $(where);
   el.style.display = "block";
   let extra = "";
@@ -2453,6 +2505,7 @@ function clueDetail(id, where){
   el.scrollIntoView({block:"nearest"});
 }
 function closeFile(){
+  logEv("ui", "Closed the case file", "casefile");
   showScreen(S.prevMode === "night" ? "night" : null);
   S.mode = S.prevMode || "world";
 }
@@ -2461,6 +2514,7 @@ function closeFile(){
 function openPeople(){
   if(S.mode !== "world") return;
   S.prevMode = S.mode; S.mode = "people";
+  logEv("ui", "Opened the people list", "people");
   showScreen("people");
   const L = $("peopleList"); L.innerHTML = "";
   const rows = [];
@@ -2486,7 +2540,7 @@ function openPeople(){
     ? "Places you haven't been yet: " + notSeen.map(k=> SCENES[k].name).join(", ") + "."
     : "You've been everywhere on campus at least once.";
 }
-function closePeople(){ showScreen(null); S.mode = "world"; }
+function closePeople(){ logEv("ui", "Closed the people list", "people"); showScreen(null); S.mode = "world"; }
 
 /* ---------- night: board first, then the reflective break ---------- */
 function nightfall(){
@@ -2700,6 +2754,7 @@ function drawLinks(cardEls){
    commitment, then the Captain names tomorrow's focus. Nothing here is scored;
    everything here is quoted back in the review. */
 function openReflect(){
+  logEv("ui", "Opened the journal", "journal");
   $("board").style.display = "none";
   $("reflect").style.display = "block";
   const J = S.journal[S.day] || (S.journal[S.day] = {q:"", alt:""});
@@ -2731,7 +2786,7 @@ function openReflect(){
   renderCTSeam();
   const B = $("reflectActions"); B.innerHTML = "";
   const mk = (t, fn, danger)=>{ const b = document.createElement("button"); b.textContent = t; if(danger) b.className="danger"; b.onclick = fn; B.appendChild(b); };
-  mk("← BACK TO THE BOARD", ()=>{ saveReflect(); $("reflect").style.display="none"; $("board").style.display="block"; renderBoard(); });
+  mk("← BACK TO THE BOARD", ()=>{ saveReflect(); logEv("ui", "Back to the board", "board"); $("reflect").style.display="none"; $("board").style.display="block"; renderBoard(); });
   if(S.day < 5) mk("SLEEP - DAY "+(S.day+1)+" →", ()=>{ saveReflect(); sleep(); });
   else mk("TAKE IT TO THE CAPTAIN", ()=>{ saveReflect(); openAccuse(); }, true);
   $("reflect").scrollIntoView({block:"start"});
@@ -2743,7 +2798,10 @@ function openReflectLean(){ // re-render the lean buttons only
 }
 function saveReflect(){
   const J = S.journal[S.day] || (S.journal[S.day] = {q:"", alt:""});
-  J.q = $("reflectQText").value.trim(); J.alt = $("reflectAltText").value.trim();
+  const q = $("reflectQText").value.trim(), alt = $("reflectAltText").value.trim();
+  if(q !== J.q) logEv("journal", "Journal (question): " + (q ? q.replace(/\n/g," / ") : "(cleared)"), "q");
+  if(alt !== J.alt) logEv("journal", "Journal (other reading): " + (alt ? alt.replace(/\n/g," / ") : "(cleared)"), "alt");
+  J.q = q; J.alt = alt;
   autosave();
 }
 // Day-seam CT layer: names tonight's skill via a COVERAGE bar (not a score),
@@ -2784,6 +2842,7 @@ function sleep(){
 /* ---------- accusation & endings ---------- */
 function openAccuse(){
   S.mode = "accuse";
+  logEv("ui", "Opened the charge screen", "accuse");
   AUD.music("tense"); AUD.night(false);
   showScreen("accuse");
   const L = $("accuseList"); L.innerHTML = "";
@@ -2793,11 +2852,17 @@ function openAccuse(){
   mk("Charge Cecilia Thomas", ()=> doAccuse("cecilia"));
   mk("Charge Frank Haynes", ()=> doAccuse("frank"));
   mk("No one killed Hannah Turner.", ()=> doAccuse("no_one"));
-  mk("← Back to the board", ()=>{ S.mode="night"; showScreen("night"); $("reflect").style.display="none"; $("board").style.display="block"; renderBoard(); });
+  mk("← Back to the board", ()=>{ logEv("ui", "Left the charge screen - back to the board", "board"); S.mode="night"; showScreen("night"); $("reflect").style.display="none"; $("board").style.display="block"; renderBoard(); });
 }
 function captainSays(text, after){
   playCut([{who:"CAPTAIN", text}], after);
 }
+function endWith(acc, end){
+  S.accused = acc; S.ending = end;
+  S.endings.push({ending:end, accused:acc, day:S.day, ms:msNow(), reopened_before:!!S.reopened});
+  logEv("ending", "Case closed: " + ENDING_TXT[end], acc, end);
+}
+const ENDING_TXT = {correct:"No one charged - self-poisoning (correct)", wrong_bestie:"Sally charged (wrong)", wrong_david:"David charged (wrong)"};
 function attempt(who, result){
   S.attempts.push({day:S.day, who, result});
   logEv("accuse", "Tried to charge: " + who + " (" + result + ")", who, result);
@@ -2810,7 +2875,7 @@ function doAccuse(who){
     if(!exonSally()){ attempt("no_one","refused - Sally not cleared"); captainSays(SOFTBLOCK.noone_sally, openAccuse); return; }
     if(!exonDavid()){ attempt("no_one","refused - David not cleared"); captainSays(SOFTBLOCK.noone_david, openAccuse); return; }
     attempt("no_one","accepted");
-    S.accused = "no_one"; S.ending = "correct";
+    endWith("no_one", "correct");
     AUD.sting(true); AUD.musicBedStop(500); AUD.walkOff(); AUD.filePlay("correct",{loop:true,fadeIn:1400});
     playCut([
       {who:"", it:"The board, finally, makes a different shape. Not a web of who-hated-her. A line. A straight line through time: a name from a canteen worker, a logo in a bin, a daily sachet, a body going grey on the stairs, a number that should never have been that high.", text:""},
@@ -2823,28 +2888,28 @@ function doAccuse(who){
   }
   if(who === "bestie"){
     attempt("bestie","charged");
-    S.accused = "bestie"; S.ending = "wrong_bestie";
+    endWith("bestie", "wrong_bestie");
     AUD.sting(false); AUD.musicBedStop(500); AUD.walkOff(); AUD.filePlay("wrong",{loop:true,fadeIn:1400});
     playCut([
       {who:"", it:"You make the charge. The paperwork takes an evening; the certainty takes less. Three days pass.", text:""},
       {who:"CAPTAIN", it:"(three days later)", text:"“Rose's released. Insufficient evidence. The firm in the city confirmed her interview - she was a mile from campus at eleven. The attendance was a tap-in; the Haynes boy's owned up. The flask came back clean - and even if it hadn't, the lab says whatever killed her was building for weeks. A flask she gave her days before couldn't do that.”",
        fx(){ collect("bestie_interview", true); collect("frank_tapin", true); S.vars.attendance_flipped = true; }},
       {who:"CAPTAIN", text:"“You had motive, a record, and a present she'd given the girl. You never once had her in the room. Because she was never in the room. Want to reopen this? If you do, think about everything you have carefully and do better, I don't want any false convictions happening on my watch.”",
-       opts:[ {t:"“Reopen the case.”", go:99, fx(){ reopen(); }}, {t:"“Let it stand.”", go:3} ]},
+       opts:[ {t:"“Reopen the case.”", go:99, fx(){ reopen(); }}, {t:"“Let it stand.”", go:3, fx(){ logEv("decline", "Let it stand - did not reopen", null); }} ]},
       {who:"", it:"The case file closes. The review remains.", text:""},
     ], ()=>{ if(!S.reopening) caseReview(); });
     return;
   }
   if(who === "david"){
     attempt("david","charged");
-    S.accused = "david"; S.ending = "wrong_david";
+    endWith("david", "wrong_david");
     AUD.sting(false); AUD.musicBedStop(500); AUD.walkOff(); AUD.filePlay("wrong",{loop:true,fadeIn:1400});
     playCut([
       {who:"", it:"You make the charge. He doesn't protest much; he looks like a man who expected to be misread. A fortnight passes.", text:""},
       {who:"CAPTAIN", it:"(a fortnight later)", text:"“Jones is out. We never had a thing on him but a temper and a textbook. No physical link - nothing of his near her food, and she wasn't eating her food, she was on that powder. Then the lab analysis landed: the supplement was over-fortified with selenium, traced to the source. Cause of death established. No room left for a poisoner who didn't poison her.”",
        fx(){ collect("supplement_analysis", true); }},
       {who:"CAPTAIN", text:"“He knew how. He had reason. He had no alibi. And he didn't do it. Knowing how a thing is done and doing it are not the same sentence - he told you that himself, apparently, the first day. Reopen?”",
-       opts:[ {t:"“Reopen the case.”", go:99, fx(){ reopen(); }}, {t:"“Let it stand.”", go:3} ]},
+       opts:[ {t:"“Reopen the case.”", go:99, fx(){ reopen(); }}, {t:"“Let it stand.”", go:3, fx(){ logEv("decline", "Let it stand - did not reopen", null); }} ]},
       {who:"", it:"The case file closes. The review remains.", text:""},
     ], ()=>{ if(!S.reopening) caseReview(); });
     return;
@@ -3193,11 +3258,12 @@ function renderExportBox(R, replaceEl){
     if(!code){ $("studyMsg").textContent = "Please enter your code first."; $("studyOutWrap").style.display="block"; return; }
     const clean = code.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12) || "NONE";
     S._code = clean;
+    logEv("export", "Prepared the session file", null);
     $("studyOut").value = buildShortCode(clean);
     $("studyOutWrap").style.display = "block";
     $("studyMsg").textContent = "";
   };
-  $("studyDl").onclick = ()=>{ if(!S._code){ $("studyMsg").textContent="Enter your code and press Prepare first."; return; } downloadText("CASE2606_session_"+S._code+".txt", buildSessionFile(S._code)); $("studyMsg").textContent = "Downloaded."; };
+  $("studyDl").onclick = ()=>{ if(!S._code){ $("studyMsg").textContent="Enter your code and press Prepare first."; return; } logEv("export", "Downloaded the session file", null); downloadText("CASE2606_session_"+S._code+".txt", buildSessionFile(S._code)); $("studyMsg").textContent = "Downloaded."; };
   $("studyCopy").onclick = ()=>{
     const ta = $("studyOut"); if(!ta.value) return; ta.select();
     try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value); else document.execCommand("copy"); $("studyMsg").textContent = "Copied."; }
@@ -3218,8 +3284,10 @@ function buildShortCode(code){
   const lc = linkCounts();
   const rows = claimRows();
   const f = [
-    "v2", "code="+code, "arm="+(ARM_READ?"read":"game"), "end="+(S.ending||"none"), "acc="+(S.accused||"none"),
-    "reopen="+(S.reopened?1:0), "day="+S.day, "frame="+frameScore(), "check="+checkScore(),
+    "v3", "code="+code, "arm="+(ARM_READ?"read":"game"), "end="+(S.ending||"none"), "acc="+(S.accused||"none"),
+    "reopen="+(S.reopened?1:0), "ends="+(S.endings.map(e=>e.ending).join(">")||"none"),
+    "min="+Math.round(msNow()/60000), "active="+Math.round(activeBetween(0, msNow())/60000),
+    "gamemin="+(()=>{ const t = timing().game_all; return t ? Math.round(t.active/60000) : 0; })(), "day="+S.day, "frame="+frameScore(), "check="+checkScore(),
     "who="+interpOf("who").length, "when="+interpOf("when").length,
     "chk="+rows.filter(r=>r.cls==="chk").length, "acc="+rows.filter(r=>r.cls==="acc").length, "unchk="+rows.filter(r=>r.cls==="non").length,
     "toxDay="+(examinedOn("tox_timeline")||0), "synthDay="+(examinedOn("dosing_mechanism")||0),
@@ -3231,12 +3299,55 @@ function buildShortCode(code){
   ];
   return "CASE2606|" + f.join("|");
 }
+/* real-time summary: wall-clock and active (breaks taken out) for each stretch */
+function timing(){
+  const L = S.log, now = msNow();
+  const first = (ev, f)=> L.find(e=> e.ev===ev && (!f || f(e)));
+  const last  = (ev, f)=> { for(let i=L.length-1; i>=0; i--) if(L[i].ev===ev && (!f || f(L[i]))) return L[i]; return null; };
+  const ms = e=> e ? e.ms : null;
+  const span = (a, b)=> (a==null || b==null || b < a) ? null : {wall:b-a, active:activeBetween(a,b), from:a, to:b};
+  const preS = ms(first("scenario_start", e=> e.x==="pre")), preE = ms(first("scenario", e=> e.x==="pre"));
+  const postS = ms(first("scenario_start", e=> e.x==="post")), postE = ms(first("scenario", e=> e.x==="post"));
+  const gameS = ms(first("start"));
+  const end1 = S.endings.length ? S.endings[0].ms : ms(first("dossier"));
+  const endN = S.endings.length ? S.endings[S.endings.length-1].ms : end1;
+  const reo = ms(first("reopen")), rev = ms(last("review")), acc1 = ms(first("accuse"));
+  const exp = ms(last("export"));
+  const days = [];
+  if(gameS!=null && !ARM_READ){
+    const sleeps = L.filter(e=> e.ev==="sleep");
+    let start = gameS;
+    for(let d=1; d<=5; d++){
+      const sl = sleeps.find(e=> e.day===d);
+      const end = sl ? sl.ms : (end1!=null ? end1 : (reo!=null ? reo : now));
+      if(start==null) break;
+      days.push(Object.assign({day:d}, span(start, end) || {wall:null, active:null}));
+      if(!sl) break;
+      start = sl.ms;
+    }
+  }
+  return {
+    total: span(0, now),
+    pre: span(preS, preE),
+    game_first: span(gameS, end1),
+    to_first_charge: span(gameS, acc1),
+    ending_to_reopen: reo!=null ? span(end1, reo) : null,
+    after_reopen: reo!=null ? span(reo, endN) : null,
+    game_all: span(gameS, endN),
+    review: span(rev, postS!=null ? postS : (exp!=null ? exp : now)),
+    post: span(postS, postE),
+    days,
+    away_ms: gapTotal("away"), idle_ms: gapTotal("idle"), resume_gap_ms: gapTotal("resume"),
+    gaps: S.clock ? S.clock.gaps : [],
+  };
+}
+const fmtClock = ms=>{ const t = Math.max(0, Math.round((ms||0)/1000)); const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), x = t%60; return h+":"+(m<10?"0":"")+m+":"+(x<10?"0":"")+x; };
 /* the full session file: readable first, then JSON for analysis */
 function buildSessionFile(code){
   const L = [], p = s=> L.push(s);
   const hr = "------------------------------------------------------------";
-  const lc = linkCounts(), rows = claimRows();
-  p(hr); p("CASE 2606 - SESSION LOG (v2)"); p("Human-readable record of one playthrough."); p("Generated on device; nothing sent anywhere."); p(hr);
+  const lc = linkCounts(), rows = claimRows(), T = timing();
+  p(hr); p("CASE 2606 - SESSION LOG (v3)"); p("Human-readable record of one playthrough."); p("Generated on device; nothing sent anywhere."); p(hr);
   p("Participant code : " + code);
   p("Generated        : " + new Date().toISOString().replace("T"," ").slice(0,16));
   p("Arm              : " + (ARM_READ ? "comparison (written dossier)" : "game"));
@@ -3245,7 +3356,21 @@ function buildSessionFile(code){
   p(" Accusation : " + (S.accused ? WHO_NAME[S.accused] : "none"));
   p(" Ending     : " + (S.ending==="correct" ? "No one charged - self-poisoning (correct)" : S.ending==="wrong_bestie" ? "Sally charged (wrong)" : S.ending==="wrong_david" ? "David charged (wrong)" : "none"));
   p(" Reopened   : " + (S.reopened ? "yes" : "no"));
+  if(S.endings.length > 1 || (S.endings.length && S.reopened)) p(" Endings    : " + S.endings.map((e,i)=> (i+1)+") "+ENDING_TXT[e.ending]+" at "+fmtClock(e.ms)).join("; "));
   if(S.attempts.length) p(" Attempts   : " + S.attempts.map(a=> "Day "+a.day+" "+a.who+" - "+a.result).join("; "));
+  p(""); p("TIME - real time (h:mm:ss from pressing Start). Active = minus breaks.");
+  const TR = (lbl, sp)=>{ if(sp) p(" " + (lbl+"                                ").slice(0,32) + ": " + fmtDur(sp.wall) + (sp.active!==sp.wall ? "  (active " + fmtDur(sp.active) + ")" : "")); };
+  TR("Whole session", T.total);
+  TR("Before-game exercise", T.pre);
+  TR(ARM_READ ? "Reading the dossier" : "Playing, to first ending", T.game_first);
+  T.days.forEach(d=> TR("  Day " + d.day, d));
+  TR("Start of case to first charge", T.to_first_charge);
+  TR("First ending to reopening", T.ending_to_reopen);
+  TR("Playing after reopening", T.after_reopen);
+  if(T.after_reopen) TR("Playing, all in", T.game_all);
+  TR("Reading the case review", T.review);
+  TR("After-game exercise", T.post);
+  p(" Breaks: tab hidden " + fmtDur(T.away_ms) + "; no input 3+ min " + fmtDur(T.idle_ms) + "; closed and resumed " + fmtDur(T.resume_gap_ms));
   p(""); p("INTERPRETIVE CHOICES - the only events behind the two derived scores");
   p(" Frame score (who-vs-when; +who/+link_who, -when/-link_when) : " + frameScore());
   p(" Check score (source-checking; +check, -accept)             : " + checkScore());
@@ -3274,20 +3399,21 @@ function buildSessionFile(code){
     ["pre","post"].forEach(k=>{ const sc=S.scenario[k]; if(!sc) return; p(" "+k.toUpperCase()+" - scenario "+sc.key+":"); SCENARIOS[sc.key].qs.forEach((q,i)=>{ p("  Q"+(i+1)+" "+q); p("  A"+(i+1)+" "+(sc.answers[i]||"(blank)").replace(/\n/g," / ")); }); p("  time on exercise: "+Math.round((sc.ms||0)/1000)+" s"); });
   }
   if(S.dossier){ p(""); p("DOSSIER CONCLUSION (comparison arm)"); p("  "+(S.dossier.text||"(blank)").replace(/\n/g," / ")); p("  time reading: "+Math.round((S.dossier.ms||0)/1000)+" s"); }
-  p(""); p("FULL TRAIL - every logged event, in order");
-  S.log.forEach(e=>{ const h=Math.floor(e.t/60), m=e.t%60; p(" D"+e.day+" "+(h<10?"0":"")+h+":"+(m<10?"0":"")+m+" ["+e.ev+"] "+e.label); });
+  p(""); p("FULL TRAIL - every logged event, in order (real time, then game day and game clock)");
+  S.log.forEach(e=>{ const h=Math.floor(e.t/60), m=e.t%60; p(" "+(e.ms!=null ? fmtClock(e.ms) : "-")+"  D"+e.day+" "+(h<10?"0":"")+h+":"+(m<10?"0":"")+m+" ["+e.ev+"] "+e.label); });
   p(hr); p("End of readable log."); p(hr);
   p("STRUCTURED DATA (for analysis; ignore if reading by eye)");
   p("---BEGIN CASE2606 JSON---");
   const J = {
-    schema:"case2606.session/v2", code, arm: ARM_READ?"read":"game", generated:new Date().toISOString(),
-    day_reached:S.day, accused:S.accused, ending:S.ending, reopened:S.reopened, attempts:S.attempts,
+    schema:"case2606.session/v3", code, arm: ARM_READ?"read":"game", generated:new Date().toISOString(),
+    day_reached:S.day, accused:S.accused, ending:S.ending, reopened:S.reopened, attempts:S.attempts, endings:S.endings,
+    timing:T,
     frame_score:frameScore(), check_score:checkScore(), interp:S.interp,
     claims:rows.map(r=>({id:r.id, heard_day:r.h, verified_day:r.v||0, accepted_day:r.a||0})),
     clues:Object.fromEntries(Object.keys(CLUES).map(id=>[id,{cat:CLUES[id].cat, collected_day:(S.clues[id]&&S.clues[id].collected)||0, examined_day:(S.clues[id]&&S.clues[id].examined)||0}])),
     links:S.links.map(l=>({a:l.a,b:l.b,day:l.day,shape:linkShape(l.a,l.b),note:l.note})), link_totals:lc,
     visits:S.visits, skippable:SKIPPABLE, lean:S.lean, journal:S.journal, scenario:S.scenario, dossier:S.dossier||null,
-    play_ms: Date.now()-(S.started||Date.now()), log:S.log,
+    play_ms: T.total ? T.total.wall : 0, active_ms: T.total ? T.total.active : 0, log:S.log,
   };
   p(JSON.stringify(J));
   p("---END CASE2606 JSON---"); p(hr); p("End of session file."); p(hr);
@@ -3300,6 +3426,7 @@ function runScenario(key, slot, onDone){
   S.mode = "scenario";
   showScreen("scenario");
   const t0 = Date.now();
+  logEv("scenario_start", "Started the " + slot + " exercise", key, slot);
   $("scenTitle").textContent = sc.title;
   $("scenText").textContent = sc.text;
   const Q = $("scenQs"); Q.innerHTML = "";
@@ -3313,7 +3440,7 @@ function runScenario(key, slot, onDone){
     const answers = sc.qs.map((q,i)=> $("scenA"+i).value.trim());
     if(answers.every(a=> !a)){ if(!confirm("You have not written anything. Continue anyway?")) return; }
     S.scenario[slot] = {key, answers, ms:Date.now()-t0};
-    logEv("scenario", "Completed the " + slot + " exercise", key);
+    logEv("scenario", "Completed the " + slot + " exercise", key, slot);
     onDone();
   };
   $("scenario").scrollTop = 0;
@@ -3324,6 +3451,7 @@ function runDossier(){
   S.mode = "dossier";
   showScreen("dossier");
   const t0 = Date.now();
+  logEv("start", "The dossier opens", null);
   const order = ["evidence","source","timeline","motive","character"];
   let html = "";
   html += "<p>You are the detective. A student, Hannah Turner, was found dead in the auditorium. The Captain wants a name by Friday. Below is everything the investigation gathered - every statement, every document, every lab result. Read it all. Then write what you conclude happened, and why.</p>";
@@ -3338,6 +3466,7 @@ function runDossier(){
   $("dossierText").value = "";
   $("dossierNext").onclick = ()=>{
     S.dossier = {text:$("dossierText").value.trim(), ms:Date.now()-t0};
+    logEv("dossier", "Submitted the dossier conclusion", null);
     // the same closing as the game: what actually happened, then the post exercise, then the file
     runScenario(POST_KEY, "post", ()=>{
       S.mode = "review"; showScreen("review");
@@ -3362,6 +3491,11 @@ function loadSave(){
 function resumeGame(){
   const s = loadSave(); if(!s) return false;
   S = s;
+  if(!S.endings) S.endings = [];
+  if(!S.clock) S.clock = freshClock();
+  { const n = Date.now(), last = S.clock.lastSeen || n;
+    S.clock.hiddenAt = null; S.clock.lastInput = n;
+    addGap("resume", last - S.started, n - S.started); }
   AUD.init(); AUD.setDay(S.day); AUD.fileStop(600);
   hud(); applySettings();
   if(S.mode === "night"){ AUD.setScene("outside"); AUD.music("theme"); nightScreen(); }

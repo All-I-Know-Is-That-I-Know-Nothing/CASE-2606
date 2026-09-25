@@ -337,9 +337,9 @@ button.danger{background:var(--verm); color:var(--paper);}
       board and decide what connects. Every action moves the clock.
     </div>
     <div class="note">
-      Content note: this story involves the sudden death of a student and
-      unregulated supplements. It is fiction, grounded in documented real
-      cases that the end-of-game review explains.
+      Content note: this story involves the sudden death of a student. It is
+      fiction, grounded in documented real cases that the end-of-game review
+      explains.
     </div>
     <button id="btnStart" style="font-size:17px; padding:12px 26px;">BEGIN THE CASE</button>
     <button id="btnResume" style="font-size:15px; padding:12px 20px; display:none; margin-left:8px;">RESUME</button>
@@ -470,7 +470,7 @@ const CLUES = {
   flask_origin:{n:"Flask contents", cat:"evidence",
     d:"Jeremiah: whatever was in that flask, it didn't come through the canteen - and everything in the building comes through him. She filled it herself, from her own kit."},
   affair:{n:"The affair", cat:"motive",
-    d:"Hannah slept with Sally's boyfriend. Sally found the messages on the second phone. The juiciest motive in the case."},
+    d:"Hannah slept with Sally's boyfriend. Sally found the messages on the second phone."},
   bestie_record:{n:"Sally's record", cat:"character",
     d:"A theft conviction at seventeen - a coat from a shop, before university. Ada handed it over already wrapped: “once a thief…”"},
   bestie_attendance_false:{n:"Attendance record", cat:"source",
@@ -485,9 +485,9 @@ const CLUES = {
   david_knowledge:{n:"David's knowledge", cat:"character",
     d:"Third year, biochemistry stream. He knows exactly what selenium does to a body in the wrong amount - and says so himself, unprompted."},
   david_estrangement:{n:"David moved out", cat:"timeline",
-    d:"Isaac: David basically moved out the last month - after the incubator thing he couldn't be in the same room as her. Slept on Isaac's floor, lived in the labs. During the exact weeks that mattered, he was barely there."},
+    d:"Isaac: David basically moved out the last month - after the incubator thing he couldn't be in the same room as her. Slept on Isaac's floor, lived in the labs. For most of that month, he was barely there."},
   victim_regime:{n:"Her regimen", cat:"timeline",
-    d:"Hannah had stopped eating flat and canteen food entirely. Her own bars, her own supplements, bought herself, taken daily, alone. There was no shared plate to tamper with."},
+    d:"Hannah had stopped eating flat and canteen food entirely. Her own bars, her own supplements, bought herself, taken daily, alone."},
   cecilia_threat:{n:"Cecilia's threat", cat:"motive",
     d:"A screaming row in front of the whole seminar: “you'll be the death of my degree.” Witnessed. Remembered. Quoted."},
   cecilia_context:{n:"The row, in context", cat:"character",
@@ -507,11 +507,11 @@ const CLUES = {
   dosing_mechanism:{n:"The mechanism", cat:"timeline",
     d:"One flat daily serving - sized by a large, athletic man to his own body, tested on friends built like him. The same scoop is a far larger dose per kilogram in a smaller body. It built, day by day, for weeks. Nobody dosed Hannah Turner. The product did."},
   victim_symptoms:{n:"She was fading", cat:"timeline",
-    d:"Tired. Pale. The sportiest person Ada knew, out of breath on the stairs. Everyone who noticed put it down to “diet nonsense” - the visible signs of chronic selenosis, read as health."},
+    d:"Tired. Pale. The sportiest person Ada knew, out of breath on the stairs. Everyone who noticed put it down to “diet nonsense”."},
   supplement_daily_evidence:{n:"The bins", cat:"timeline",
     d:"Logan: foil sachets, every day, weeks of them, all the same dumbbell-and-stethoscope logo. Lately, chemist's iron tablets - she was getting tired and trying to fix it herself. Daily. Same time. Weeks."},
   david_wished_harm:{n:"“I wished she'd disappear”", cat:"motive",
-    d:"After she ruined three weeks of his cell cultures, David told Isaac he wished she'd just disappear. Said once, in anger, months ago. Vivid. Memorable. Worth almost nothing."},
+    d:"After she ruined three weeks of his cell cultures, David told Isaac he wished she'd just disappear. Said once, in anger, months ago."},
   supplement_calendar:{n:"Her calendar", cat:"timeline",
     d:"A wall planner in Hannah's half of the room - every morning ticked, weeks back, a little grid of supplements to take each day. Not one thing. Several, on a schedule. Same time, every day."},
   flask_lab:{n:"Flask - lab result", cat:"evidence",
@@ -1021,7 +1021,7 @@ cecilia:{
           {t:"“Where were you that morning?”", go:"c3"},
           {t:"“‘The death of your degree’ is a strange thing to land on.”", go:"c4"},
         ]},
-    c2:{who:"CECILIA", it:"(her hands shake - not with guilt, with remembered injustice)",
+    c2:{who:"CECILIA", it:"(her hands shake)",
         text:"“Group project. Four of us, and Hannah did nothing - not a slide, not a citation - and then stood up and presented our work like she'd bled for it. I have a scholarship. It's conditional. She was playing with my whole life for a laugh.”",
         fx(){ collect("cecilia_threat", true); }, go:"chub"},
     c3:{who:"CECILIA", it:"(a bitter laugh)",
@@ -1063,7 +1063,7 @@ frank:{
           {t:"“What's the place you should be?”", go:"f3"},
           {t:"“You and Hannah were seen having an intense conversation.”", go:"f4"},
         ]},
-    f2:{who:"FRANK", it:"(a flash of real frustration - the lifelong weight of being misread)",
+    f2:{who:"FRANK", it:"(a flash of real frustration)",
         text:"“I'm always - this is just my face. My everything. I'm nervous buying milk. It's not - it doesn't mean anything. Everyone always thinks it means something.”", go:"fhub"},
     f3:{who:"FRANK", it:"(He goes very still.)",
         text:"“…I tapped someone's attendance in. Sally's. She asked me - she had somewhere to be and she couldn't lose the marks and I owed her, so I - is that academic fraud, do you think? I hope not! I don't want to be caught for something that seems so innocent.”",
@@ -1222,7 +1222,7 @@ amaya:{
           {t:"“Who was present that morning?”", go:"h2"},
           {t:"“How reliable is the attendance system?”", go:"h3"},
         ]},
-    h2:{who:"AMAYA", it:"(She believes every word. She is wrong, and her certainty is the trap.)",
+    h2:{who:"AMAYA", it:"(She says it with total certainty.)",
         text:"“Sally Rose was present and registered for the nine o'clock. So were the others in the cohort. The system is quite robust - we take attendance very seriously here.”",
         fx(){ collect("bestie_attendance_false"); heard("bestie_attendance_false"); S.vars.hos_h2_seen = true; },
         opts:[
@@ -1266,7 +1266,7 @@ jeremiah:{
         ]},
     j2:{who:"JEREMIAH", text:"“Protein bars by the box. Supplements - not ours, she brought her own. Wouldn't touch canteen food the last month or so. ‘Clean regimen,’ she called it. I gave her the name, you know. The - the influencer. Bloke off TikTok, calls himself a doctor. She'd asked who I followed for fitness and I - God. I gave her the name.”",
         fx(){ collect("victim_regime", true); collect("supplement_intro", true); }, go:"jhub"},
-    j3:{who:"JEREMIAH", text:"“Whatever was in that flask, it didn't come through me, and everything in this building comes through me. She filled it herself, from her own kit. That flask is a red herring if I ever saw one.”",
+    j3:{who:"JEREMIAH", text:"“Whatever was in that flask, it didn't come through me, and everything in this building comes through me. She filled it herself, from her own kit.”",
         fx(){ collect("flask_origin", true); }, go:"jhub"},
     j4:{who:"JEREMIAH", text:"“Looked rough, end of it. Grey, tired, this sporty girl out of puff. I nearly said something. You always think you'll get another chance to say something.”",
         fx(){ collect("victim_symptoms", true); }, go:"jhub"},
@@ -1305,7 +1305,7 @@ logan:{
     l3:{who:"LOGAN", text:"“The skinny nervous lad, gloves? He was at the door tapping a card that morning - wasn't his card, mind. Two taps, one lad. I notice things. Doesn't mean I say them. I'm saying them to you.”",
         fx(){ S.vars.logan_l3 = true; if(V("frank_f3")) verify("frank_tapin","Heard the tap-in from Logan after Frank"); collect("frank_tapin", true); heard("frank_tapin"); }, go:"lhub"},
     l4:{who:"LOGAN", it:"(a long look)",
-        text:"“Me? I don't think. I notice. Thinking's your job. But I'll ask you this, since you asked me: of everything you've put on that board of yours - how much of it tells you who hated her, and how much tells you when she started dying? …No. Don't tell me. Tell yourself. I've bins to do.”",
+        text:"“Me? I don't think. I notice. Thinking's your job. I've bins to do.”",
         fx(){ S.vars.logan_l4 = true; }, end:true},
     lhub:{who:"LOGAN", text:"“Still here. Bins won't empty themselves, mind.”",
         opts:[
@@ -2436,8 +2436,8 @@ const CAPTAIN_BRIEF = [
 
 const SOFTBLOCK = {
   cecilia: "“You want to charge Thomas? On what - a raised voice and an empty seat in the library? No object, no access, no substance, no method. The CPS would laugh us out of the building. Bring me something that puts a means in her hands, or bring me someone else.”",
-  frank: "“Haynes? The boy who won't share a pen? You want to argue he hand-dosed her food over weeks. Show me how. Show me when. You've got a nervous kid with a cheating problem and a favour he shouldn't have done. That's not a murderer, that's a disciplinary hearing.”",
-  noone_guess: "“You may be right. But you can't show why. An answer you can't defend isn't a conclusion - it's a guess. Go back to the board.”",
+  frank: "“Haynes? The boy who won't share a pen? You want to argue he poisoned her. Show me how. Show me when. You've got a nervous kid with a cheating problem and a favour he shouldn't have done. That's not a murderer, that's a disciplinary hearing.”",
+  noone_guess: "“Then show me why. You can't. An answer you can't defend isn't a conclusion - it's a guess. Go back to the board.”",
   // Two suspect-specific "no one" blocks: the redirect points the player at the exact
   // thread they left open, rather than the whole board. Shown when the timeline synthesis
   // is done but that suspect isn't cleared on the board.
@@ -2832,7 +2832,6 @@ function sleep(){
     AUD.setDay(next); AUD.setScene("outside"); AUD.night(false); AUD.music("theme");
     showScreen(null); S.mode = "world"; hud();
     checkCombos();
-    if(next===2) toast("Day 2. Reasons are everywhere. Reasons aren't hands.", true);
     if(next===5) toast("Day 5. The Captain wants an answer tonight.", true);
     if(V("flask_sent") && !has("flask_lab")) setTimeout(deliverFlask, 900);
     autosave();
@@ -2851,7 +2850,7 @@ function openAccuse(){
   mk("Charge David Jones", ()=> doAccuse("david"));
   mk("Charge Cecilia Thomas", ()=> doAccuse("cecilia"));
   mk("Charge Frank Haynes", ()=> doAccuse("frank"));
-  mk("No one killed Hannah Turner.", ()=> doAccuse("no_one"));
+  mk("Charge no one", ()=> doAccuse("no_one"));
   mk("← Back to the board", ()=>{ logEv("ui", "Left the charge screen - back to the board", "board"); S.mode="night"; showScreen("night"); $("reflect").style.display="none"; $("board").style.display="block"; renderBoard(); });
 }
 function captainSays(text, after){

@@ -174,8 +174,7 @@ button.danger{background:var(--verm); color:var(--paper);}
 }
 #reflect .rq{font-style:italic; color:var(--paper); font-size:14px; max-width:560px; line-height:1.5;}
 #reflect .rlabel{font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--dim); margin-top:10px;}
-#leanRow{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px; max-width:560px;}
-#leanRow .lean{font-size:12px; padding:5px 9px;}
+.who-role{display:block; font-size:10.5px; letter-spacing:1px; opacity:.75; margin-top:2px; text-transform:none;}
 #reflectActions{display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;}
 #ctSeam{max-width:560px; margin-top:14px;}
 #ctSeam .ct-brief{font-style:italic; color:var(--amber); font-size:13px; line-height:1.5; margin-bottom:10px;}
@@ -245,6 +244,15 @@ button.danger{background:var(--verm); color:var(--paper);}
 #review .own-day > b{color:var(--amber); letter-spacing:1px; font-size:12px;}
 #review .carry{margin-top:14px; padding:12px 14px; border:2px dashed var(--amber);}
 #review .carry ol{margin:8px 0 0 20px; line-height:1.7;}
+#review .credits{max-width:600px; margin:34px auto 10px; padding:26px 22px 22px; text-align:center;
+  background:rgba(34,30,34,.92); border:3px solid var(--amber); box-shadow:0 0 0 3px var(--plum);}
+#review .credits h2{font-size:24px; letter-spacing:6px; color:var(--amber); margin:0 0 4px;}
+#review .credits .c-title{font-size:15px; letter-spacing:2px; color:var(--paper); margin-bottom:2px;}
+#review .credits .c-sub{font-size:12.5px; color:var(--dim); margin-bottom:18px; line-height:1.5;}
+#review .credits .c-row{margin:0 0 14px;}
+#review .credits .c-role{display:block; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--amber); margin-bottom:3px;}
+#review .credits .c-name{font-size:17px; color:var(--paper); letter-spacing:1px;}
+#review .credits .c-thanks{margin-top:18px; padding-top:14px; border-top:2px solid var(--plum); font-size:13px; color:var(--dim); line-height:1.6;}
 .study-box{max-width:600px; margin:0 auto 40px; padding:16px; background:var(--ink); border:2px dashed var(--amber); color:var(--paper);}
 .study-box h3{margin:0 0 8px; color:var(--amber);}
 .study-box p{font-size:13px; line-height:1.5; color:var(--paper); margin:0 0 12px;}
@@ -343,7 +351,7 @@ button.danger{background:var(--verm); color:var(--paper);}
     </div>
     <button id="btnStart" style="font-size:17px; padding:12px 26px;">BEGIN THE CASE</button>
     <button id="btnResume" style="font-size:15px; padding:12px 20px; display:none; margin-left:8px;">RESUME</button>
-    <div class="keys">CLICK TO WALK &nbsp;·&nbsp; WASD / ARROWS &nbsp;·&nbsp; E - INTERACT &nbsp;·&nbsp; 1 - 9 - CHOOSE &nbsp;·&nbsp; TAB - CASE FILE &nbsp;·&nbsp; P - PEOPLE &nbsp;·&nbsp; ESC - CLOSE</div>
+    <div class="keys">CLICK TO WALK &nbsp;·&nbsp; WASD / ARROWS &nbsp;·&nbsp; E - INTERACT &nbsp;·&nbsp; 1 - 9 - CHOOSE &nbsp;·&nbsp; TAB - CASE FILE &nbsp;·&nbsp; P - PEOPLE &nbsp;·&nbsp; ESC - CLOSE / BACK TO START</div>
   </div>
 
   <!-- cutscene -->
@@ -389,10 +397,6 @@ button.danger{background:var(--verm); color:var(--paper);}
       <div class="rlabel">The other way to read it</div>
       <div class="rq" id="reflectAlt"></div>
       <textarea id="reflectAltText" placeholder="(one other explanation, even a bad one)"></textarea>
-      <div id="leanWrap">
-        <div class="rlabel">If the Captain phoned right now and asked for a name</div>
-        <div id="leanRow"></div>
-      </div>
       <div id="ctSeam"></div>
       <div id="reflectActions"></div>
     </div>
@@ -545,14 +549,8 @@ const REFLECT_ALT = {
   linked:"Tonight you pinned «A» to «B». Suppose that thread is wrong. What is the other way to read those two things?",
   nolink:"Nothing went on the board tonight. What is the one thing you most want to know tomorrow - and who would actually know it?",
 };
-const LEAN_OPTS = [
-  {id:"sally",   t:"Sally Rose"},
-  {id:"david",   t:"David Jones"},
-  {id:"cecilia", t:"Cecilia Thomas"},
-  {id:"frank",   t:"Frank Haynes"},
-  {id:"none_yet",t:"I would not name anyone yet"},
-  {id:"no_one",  t:"I am not sure anyone did this", cond:()=>ex("tox_timeline")},
-];
+const WHO_ROLE = {sally:"Hannah's best friend", bestie:"Hannah's best friend", david:"Hannah's flatmate", cecilia:"Hannah's classmate", frank:"Hannah's classmate"};
+const withRole = (label, id)=> esc(label) + (WHO_ROLE[id] ? "<span class='who-role'>" + esc(WHO_ROLE[id]) + "</span>" : "");
 
 /* ---------- Transfer scenarios (study mode only) ----------
    Two matched causal-inference scenarios, one BEFORE play and one AFTER.
@@ -1434,9 +1432,10 @@ let STAGE_K = 1;
 addEventListener("resize", fitStage);
 
 /* ---------- run modes (from the URL; nothing else reads the URL) ----------
-   ?study=1   research session: pre/post exercises + session export at the end
+   ?study=1   research session: session file export at the end of the review
+              (questionnaires and exercises are in MS Forms, not in the game)
    ?arm=read  comparison arm: the same case as a written dossier, no game
-   ?swap=1    counterbalance the two exercises (B before, A after)          */
+   ?swap=1    (unused - the in-game exercises are switched off)          */
 const STUDY_MODE = /[?&]study=1\b/.test(location.search);
 const ARM_READ   = /[?&]arm=read\b/.test(location.search);
 const SWAP_SCEN  = /[?&]swap=1\b/.test(location.search);
@@ -1725,7 +1724,9 @@ function step(){
     pr.style.display = "block";
     pr.textContent = "E - " + interactTarget.label;
     pr.style.left = Math.max(4, Math.min(500, interactTarget.x-40)) + "px";
-    pr.style.top = (interactTarget.y-58) + "px";
+    const up = interactTarget.y - 58;
+    const hb = $("hud"), barBottom = hb.offsetTop + hb.offsetHeight + 4;
+    pr.style.top = (up < barBottom ? interactTarget.y + 26 : up) + "px"; // near the top bar: show it below instead
   } else pr.style.display = "none";
 }
 
@@ -2770,19 +2771,7 @@ function openReflect(){
   } else alt = REFLECT_ALT.nolink;
   $("reflectAlt").textContent = alt;
   $("reflectAltText").value = J.alt;
-  // nightly lean (not on day 5 - that night is the conclusion itself)
-  const L = $("leanRow"); L.innerHTML = "";
-  if(S.day < 5){
-    $("leanWrap").style.display = "block";
-    LEAN_OPTS.forEach(o=>{
-      if(o.cond && !o.cond()) return;
-      const b = document.createElement("button");
-      b.className = "lean" + (S.lean[S.day]===o.id ? " on" : "");
-      b.textContent = o.t;
-      b.onclick = ()=>{ S.lean[S.day] = o.id; logEv("lean", "Tonight's lean: " + o.t, o.id); openReflectLean(); };
-      L.appendChild(b);
-    });
-  } else $("leanWrap").style.display = "none";
+  // (the nightly "name someone" question was removed: it pointed players at who to blame)
   renderCTSeam();
   const B = $("reflectActions"); B.innerHTML = "";
   const mk = (t, fn, danger)=>{ const b = document.createElement("button"); b.textContent = t; if(danger) b.className="danger"; b.onclick = fn; B.appendChild(b); };
@@ -2790,11 +2779,6 @@ function openReflect(){
   if(S.day < 5) mk("SLEEP - DAY "+(S.day+1)+" →", ()=>{ saveReflect(); sleep(); });
   else mk("TAKE IT TO THE CAPTAIN", ()=>{ saveReflect(); openAccuse(); }, true);
   $("reflect").scrollIntoView({block:"start"});
-}
-function openReflectLean(){ // re-render the lean buttons only
-  document.querySelectorAll("#leanRow .lean").forEach(b=>{
-    b.classList.toggle("on", LEAN_OPTS.find(o=> o.t===b.textContent).id === S.lean[S.day]);
-  });
 }
 function saveReflect(){
   const J = S.journal[S.day] || (S.journal[S.day] = {q:"", alt:""});
@@ -2845,11 +2829,11 @@ function openAccuse(){
   AUD.music("tense"); AUD.night(false);
   showScreen("accuse");
   const L = $("accuseList"); L.innerHTML = "";
-  const mk = (t, fn)=>{ const b = document.createElement("button"); b.textContent = t; b.onclick = fn; L.appendChild(b); };
-  mk("Charge Sally Rose", ()=> doAccuse("bestie"));
-  mk("Charge David Jones", ()=> doAccuse("david"));
-  mk("Charge Cecilia Thomas", ()=> doAccuse("cecilia"));
-  mk("Charge Frank Haynes", ()=> doAccuse("frank"));
+  const mk = (t, fn, id)=>{ const b = document.createElement("button"); b.innerHTML = withRole(t, id); b.onclick = fn; L.appendChild(b); };
+  mk("Charge Sally Rose", ()=> doAccuse("bestie"), "bestie");
+  mk("Charge David Jones", ()=> doAccuse("david"), "david");
+  mk("Charge Cecilia Thomas", ()=> doAccuse("cecilia"), "cecilia");
+  mk("Charge Frank Haynes", ()=> doAccuse("frank"), "frank");
   mk("Charge no one", ()=> doAccuse("no_one"));
   mk("← Back to the board", ()=>{ logEv("ui", "Left the charge screen - back to the board", "board"); S.mode="night"; showScreen("night"); $("reflect").style.display="none"; $("board").style.display="block"; renderBoard(); });
 }
@@ -2982,6 +2966,26 @@ function leanTrail(){
 }
 function quoteBlock(txt){ return txt ? "<div class='ownwords'>“"+esc(txt)+"”</div>" : ""; }
 
+/* ---------- credits: edit names and roles here only ---------- */
+const CREDITS = {
+  title: "CASE 2606",
+  sub: "",
+  rows: [
+    ["Project Lead", "Maritina Keleri"],
+    ["Project Co-Lead", "Dr Maria Marda"],
+    ["Narrative Design & Interaction Design", "Millie Thomson"],
+    ["Visual Design", "Lara Kleingarn"],
+    ["Special thanks for their contribution to the early stages", "Lumie Gomes & Marcus Carone"],
+  ],
+  thanks: "This project was supported by Students As Co-Creators programme at the University of Westminster, UK",
+};
+function creditsHTML(){
+  return "<div class='credits' id='credits'><h2>CREDITS</h2>"
+    + "<div class='c-title'>" + esc(CREDITS.title) + "</div>"
+    + (CREDITS.sub ? "<div class='c-sub'>" + esc(CREDITS.sub) + "</div>" : "<div class='c-sub'></div>")
+    + CREDITS.rows.map(r=> "<div class='c-row'><span class='c-role'>" + esc(r[0]) + "</span><span class='c-name'>" + esc(r[1]) + "</span></div>").join("")
+    + "<div class='c-thanks'>" + esc(CREDITS.thanks) + "</div></div>";
+}
 function caseReview(){
   AUD.fileCrossfade("credits",{loop:true,ms:2200});
   S.mode = "review";
@@ -3218,11 +3222,11 @@ function caseReview(){
     + "<li>Who told me this - and what would I look at to find out it was wrong?</li>"
     + "<li>Who have I not asked, because they did not seem to matter?</li></ol></div>");
 
-  R.innerHTML = blocks.join("")
+  R.innerHTML = blocks.join("") + creditsHTML()
     + "<div class='actions'><button id='btnAgain'>PLAY AGAIN</button><button id='btnSaveReview'>DOWNLOAD THIS REVIEW</button></div>";
   $("btnAgain").onclick = ()=>{ AUD.fileStop(600); newGame(); showScreen("title"); S.mode = "title"; refreshTitle(); };
   $("btnSaveReview").onclick = ()=> downloadText("CASE2606_review.txt", R.innerText);
-  if(STUDY_MODE) renderStudyClose(R);
+  if(STUDY_MODE) renderExportBox(R);
   R.scrollTop = 0;
 }
 
@@ -3244,7 +3248,7 @@ function renderExportBox(R, replaceEl){
   box.className = "study-box";
   box.innerHTML =
     "<h3>Research session - your session file</h3>"
-    + "<p>Enter the personal code you used on the questionnaires. Then download your session file and upload it where the questionnaire asks - or copy the short code line into the final question if upload is not available.</p>"
+    + "<p>Enter the personal code you used on the questionnaires. Then download your session file (a Word document) and upload it where the questionnaire asks - or copy the short code line into the final question if upload is not available.</p>"
     + "<div class='study-row'><label>Your personal code: </label>"
     + "<input id='studyCode' type='text' maxlength='12' autocomplete='off' placeholder='e.g. AN0743'></div>"
     + "<div class='study-row'><button id='studyGen'>PREPARE MY FILE</button></div>"
@@ -3262,7 +3266,7 @@ function renderExportBox(R, replaceEl){
     $("studyOutWrap").style.display = "block";
     $("studyMsg").textContent = "";
   };
-  $("studyDl").onclick = ()=>{ if(!S._code){ $("studyMsg").textContent="Enter your code and press Prepare first."; return; } logEv("export", "Downloaded the session file", null); downloadText("CASE2606_session_"+S._code+".txt", buildSessionFile(S._code)); $("studyMsg").textContent = "Downloaded."; };
+  $("studyDl").onclick = ()=>{ if(!S._code){ $("studyMsg").textContent="Enter your code and press Prepare first."; return; } logEv("export", "Downloaded the session file", null); downloadDocx("CASE2606_session_"+S._code, buildSessionFile(S._code)); $("studyMsg").textContent = "Downloaded."; };
   $("studyCopy").onclick = ()=>{
     const ta = $("studyOut"); if(!ta.value) return; ta.select();
     try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value); else document.execCommand("copy"); $("studyMsg").textContent = "Copied."; }
@@ -3274,6 +3278,71 @@ function downloadText(name, text){
   try{
     const b = new Blob([text], {type:"text/plain;charset=utf-8"});
     const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }catch(e){ modal("DOWNLOAD", "Your browser blocked the download. Copy the short code instead."); }
+}
+/* ---------- Word (.docx) export, built in the browser ----------
+   One paragraph per log line, monospace, spaces kept. A minimal valid
+   package: [Content_Types].xml, _rels/.rels, word/document.xml, stored
+   (uncompressed) in a ZIP with CRC-32. Falls back to .txt if anything fails. */
+const CRC_T = (()=>{ const t = new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(b){ let c = 0xFFFFFFFF; for(let i=0;i<b.length;i++) c = CRC_T[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){ // files: [{name, data:Uint8Array}]
+  const enc = new TextEncoder(), parts = [], central = [];
+  const d = new Date(), dosT = (d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),
+        dosD = ((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  let off = 0;
+  files.forEach(f=>{
+    const nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint16(10,dosT,true); h.setUint16(12,dosD,true); h.setUint32(14,crc,true);
+    h.setUint32(18,sz,true); h.setUint32(22,sz,true); h.setUint16(26,nm.length,true); h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer), nm, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true);
+    c.setUint16(12,dosT,true); c.setUint16(14,dosD,true); c.setUint32(16,crc,true);
+    c.setUint32(20,sz,true); c.setUint32(24,sz,true); c.setUint16(28,nm.length,true);
+    c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), nm);
+    off += 30 + nm.length + sz;
+  });
+  const cdSize = central.reduce((a,b)=> a + b.length, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true);
+  e.setUint32(12,cdSize,true); e.setUint32(16,off,true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+}
+function buildDocx(text){
+  const x = s=> s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const run = "<w:rPr><w:rFonts w:ascii=\"Consolas\" w:hAnsi=\"Consolas\" w:cs=\"Consolas\"/><w:sz w:val=\"18\"/></w:rPr>";
+  const body = text.split("\n").map(l=> l
+    ? "<w:p><w:pPr><w:spacing w:after=\"0\"/></w:pPr><w:r>"+run+"<w:t xml:space=\"preserve\">"+x(l)+"</w:t></w:r></w:p>"
+    : "<w:p><w:pPr><w:spacing w:after=\"0\"/></w:pPr></w:p>").join("");
+  const doc = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    + "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>" + body
+    + "<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1134\" w:right=\"1134\" w:bottom=\"1134\" w:left=\"1134\" w:header=\"708\" w:footer=\"708\" w:gutter=\"0\"/></w:sectPr>"
+    + "</w:body></w:document>";
+  const types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+    + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+    + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+    + "<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>";
+  const rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+    + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>";
+  const enc = new TextEncoder();
+  return zipStore([
+    {name:"[Content_Types].xml", data:enc.encode(types)},
+    {name:"_rels/.rels", data:enc.encode(rels)},
+    {name:"word/document.xml", data:enc.encode(doc)},
+  ]);
+}
+function downloadDocx(base, text){
+  let b;
+  try{ b = buildDocx(text); }catch(e){ downloadText(base + ".txt", text); return; }
+  try{
+    const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = base + ".docx";
     document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }catch(e){ modal("DOWNLOAD", "Your browser blocked the download. Copy the short code instead."); }
 }
@@ -3292,7 +3361,6 @@ function buildShortCode(code){
     "toxDay="+(examinedOn("tox_timeline")||0), "synthDay="+(examinedOn("dosing_mechanism")||0),
     "clues="+cv.filter(c=>c.collected).length+"/"+cv.filter(c=>c.examined).length,
     "links="+S.links.length+"(who"+lc.who+",when"+lc.when+",bridge"+lc.bridge+")",
-    "lean="+[1,2,3,4].map(d=> S.lean[d]||"-").join(">"),
     "skip="+(SKIPPABLE.filter(id=>!S.visits[id]).join("+")||"none"),
     "tries="+(S.attempts.map(a=>a.who+":"+(a.result.startsWith("refused")?"x":"ok")).join("+")||"none"),
   ];
@@ -3389,8 +3457,6 @@ function buildSessionFile(code){
   p(" Totals: "+S.links.length+" links - "+lc.who+" who-to-who, "+lc.when+" when-to-when, "+lc.bridge+" bridging, "+lc.other+" other");
   p(""); p("PEOPLE - who was spoken to, and when");
   Object.keys(NPCS).forEach(id=> p(" "+NPCS[id].name+" - "+dayList(S.visits[id])+(SKIPPABLE.includes(id)?" (quiet source)":"")));
-  p(""); p("NIGHTLY LEAN - who you would have named");
-  [1,2,3,4].forEach(d=> p(" Day "+d+": "+(S.lean[d] ? (WHO_NAME[S.lean[d]]||S.lean[d]) : "(not answered)")));
   p(""); p("NIGHTLY REFLECTION - the participant's own words");
   for(let d=1; d<=5; d++){ const J=S.journal[d]; if(!J||(!J.q&&!J.alt)) continue; p(" Day "+d+":"); if(J.q) p("  "+J.q.replace(/\n/g," / ")); if(J.alt) p("  other reading: "+J.alt.replace(/\n/g," / ")); }
   if(S.scenario.pre || S.scenario.post){
@@ -3419,7 +3485,8 @@ function buildSessionFile(code){
   return L.join("\n");
 }
 
-/* ---------- transfer scenario screen (study mode) ---------- */
+/* ---------- transfer scenario screen - NOT USED: the exercises now live in MS Forms.
+   Kept so they can be switched back on by calling runScenario() again. ---------- */
 function runScenario(key, slot, onDone){
   const sc = SCENARIOS[key];
   S.mode = "scenario";
@@ -3466,13 +3533,14 @@ function runDossier(){
   $("dossierNext").onclick = ()=>{
     S.dossier = {text:$("dossierText").value.trim(), ms:Date.now()-t0};
     logEv("dossier", "Submitted the dossier conclusion", null);
-    // the same closing as the game: what actually happened, then the post exercise, then the file
-    runScenario(POST_KEY, "post", ()=>{
+    // the same closing as the game: what actually happened, then the file
+    (()=>{
       S.mode = "review"; showScreen("review");
       const R = $("review");
       R.innerHTML = "<div class='blk'><h1>WHAT ACTUALLY HAPPENED</h1><p>Hannah Turner followed a man who called himself a doctor. Dr. Kai Brennan held a real doctorate from an institution that sells them. He invented a supplement, tested it on his own large, athletic body and a few friends like him, and gave it free to the first hundred strangers who'd repost it. He never imagined a different body. The dose that did nothing to him built, day by day, in someone half his size - until it didn't. No one in this story is a murderer.</p></div>";
+      R.insertAdjacentHTML("beforeend", creditsHTML());
       renderExportBox(R, null);
-    });
+    })();
   };
   $("dossier").scrollTop = 0;
 }
@@ -3500,6 +3568,36 @@ function resumeGame(){
   if(S.mode === "night"){ AUD.setScene("outside"); AUD.music("theme"); nightScreen(); }
   else { S.mode = "world"; AUD.setScene(S.scene); AUD.music("theme"); AUD.musicBed(S.scene==="auditorium"?"music_auditorium":"music_rooms"); showScreen(null); toast("Resumed. Day " + S.day + ".", true); }
   return true;
+}
+/* ESC with nothing open: offer the start screen. Progress is saved (RESUME);
+   during the opening scene nothing has started yet, so nothing is saved. */
+function canGoBack(){
+  if(!S || S.ending || S.reopening) return false;
+  if(S.mode === "world" || S.mode === "night") return true;
+  return S.mode === "cut" && CUT && CUT.seq === CASE_INTRO;
+}
+function askBackToStart(){
+  if(!canGoBack()) return;
+  const inIntro = S.mode === "cut";
+  $("modalBox").innerHTML = "<h3>BACK TO THE START?</h3><div>"
+    + (inIntro ? "The case hasn't started yet." : "Your progress is saved on this device. Press RESUME on the start screen to carry on from here.")
+    + "</div>";
+  const row = document.createElement("div"); row.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
+  const go = document.createElement("button"); go.textContent = "GO TO THE START";
+  const stay = document.createElement("button"); stay.textContent = "KEEP PLAYING";
+  go.onclick = ()=>{ closeModal(); backToStart(inIntro); };
+  stay.onclick = ()=> closeModal();
+  row.appendChild(go); row.appendChild(stay); $("modalBox").appendChild(row);
+  $("modal").style.display = "flex";
+  setTimeout(()=> stay.focus(), 20);
+}
+function backToStart(inIntro){
+  PATH = null; PATH_GOAL = null; CUT = null;
+  for(const k in KEYS) KEYS[k] = false;
+  $("prompt").style.display = "none";
+  if(!inIntro){ logEv("title", "Went back to the start screen", null); autosave(); }
+  AUD.walkOff(); AUD.musicBedStop(600); AUD.fileStop(600); AUD.night(false); AUD.music("quiet");
+  S.mode = "title"; showScreen("title"); refreshTitle();
 }
 function refreshTitle(){
   const has = !!loadSave();
@@ -3545,6 +3643,7 @@ addEventListener("keydown", e=>{
   }
   if(S.mode === "cut" && (e.key==="e"||e.key==="Enter"||e.key===" ") && CUT && !CUT.seq[CUT.i].opts){ cutNext(); return; }
   if(S.mode === "file" && (e.key === "Escape" || e.key === "Tab")){ e.preventDefault(); closeFile(); return; }
+  if(e.key === "Escape" && canGoBack()){ askBackToStart(); return; }
   if(S.mode === "people" && (e.key === "Escape" || e.key === "p")){ closePeople(); return; }
   if(S.mode === "world"){
     if(e.key === "e" || e.key === "Enter") interact();
@@ -3577,7 +3676,7 @@ function enterWorld(){
 $("btnStart").onclick = ()=>{
   newGame(); clearSave();
   const begin = ()=>{ if(ARM_READ) runDossier(); else startGame(); };
-  if(STUDY_MODE) runScenario(PRE_KEY, "pre", begin); else begin();
+  begin();
 };
 $("btnResume").onclick = ()=>{ if(!resumeGame()) refreshTitle(); };
 // touch
